@@ -66,8 +66,9 @@ app.get('/location', (request, response) => {
           ];
           client.query(insertStatement, insertValue)
             .then(result => {
-              this.id = result.rows[0].id;
-              return this;
+              console.log(`SQL query result: ${result.rows[0].id}`);
+              locationObject.id = result.rows[0].id;
+              return locationObject;
             });
           response.status(200).send(locationObject);
         });
@@ -81,6 +82,12 @@ app.get('/location', (request, response) => {
 
 app.get('/weather', (request, response) => {
   try {
+    console.log(`lookup function returned: ${Object.values(lookupFunction(
+      request.query.data,
+      'weather',
+      weatherDbFetcher,
+      weatherApiFetcher
+    ))}`);
     response
       .status(200)
       .send(
@@ -118,50 +125,62 @@ app.get('/events', (request, response) => {
   }
 });
 
-function lookupFunction(data, table, dbFetcher, apiFetcher) {
+function lookupFunction(locationData, table, dbFetcher, apiFetcher) {
   //if locations contains searchQuery, execute other functions to fetch their data
+  console.log(`locationData: ${locationData.id}`);
   let sqlStatement = `SELECT * FROM ${table} WHERE location_id = $1;`;
-  let values = [data.id];
+  let values = [locationData.id];
   return client.query(sqlStatement, values).then(data => {
     //if data in database
+    console.log(`data.rowCount: ${data.rowCount}`);
     if (data.rowCount > 0) {
-      return apiFetcher(
-        data.id,
-        data.latitude,
-        data.longitude
-      );
+      console.log(`dbFetcher returned: ${Object.values(dbFetcher(data.id))}`);
+      return dbFetcher(data.id);
     } else {
-      return dbFetcher(data);
+      console.log(`apiFetcher returned: ${Object.values(apiFetcher(locationData.id,
+        locationData.latitude,
+        locationData.longitude))}`);
+      return apiFetcher(
+        locationData.id,
+        locationData.latitude,
+        locationData.longitude
+      );
     }
   });
 }
 
-function weatherDbFetcher(data) {
+function weatherDbFetcher(id) {
   console.log('WeatherDbFetcher called');
   //go into weather table and return correct weather object
   let sqlStatement = 'SELECT * FROM weather WHERE location_id = $1;';
-  let value = [data.id];
+  let value = [id];
   return client.query(sqlStatement, value);
 }
 
-function weatherApiFetcher(data, latitude, longitude) {
+function weatherApiFetcher(id, latitude, longitude) {
   console.log('WeatchAPIFetcher called');
+  console.log(`location id: ${id}`);
   try {
-    let dataFile = `https://api.darksky.net/forecast/${
-      process.env.DARKSKY_KEY
-    }/${latitude},${longitude}`;
+    console.log(`latitude: ${latitude}, longitude: ${longitude}`);
+    let dataFile = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
+
     superagent.get(dataFile).end((err, weatherApiResponse) => {
+      console.log(`weatherApiResponse: ${weatherApiResponse}`);
       let weatherForecastMap = weatherApiResponse.body.daily.data.map(element => {
         return new Weather(element.summary, element.time);
       });
-      let insertStatement =
+      console.log(weatherForecastMap);
+      weatherForecastMap.forEach(element => {
+        let insertStatement =
         'INSERT INTO weather (location_id, forecast, weather_time) VALUES ( $1, $2, $3);';
-      let insertValue = [
-        data.id,
-        weatherForecastMap.forecast,
-        weatherForecastMap.time
-      ];
-      client.query(insertStatement, insertValue);
+        let insertValue = [
+          id,
+          element.forecast,
+          element.time
+        ];
+        client.query(insertStatement, insertValue);
+      });
+
       return weatherForecastMap;
     });
   } catch(error){
