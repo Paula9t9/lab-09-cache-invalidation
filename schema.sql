@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS locations (
 CREATE TABLE IF NOT EXISTS weather(
   id SERIAL PRIMARY KEY,
   location_id INTEGER REFERENCES locations(id),
-  time_stamp BIGINT,
+  created_at BIGINT,
   forecast VARCHAR(255),
   weather_time VARCHAR(255)
 );
