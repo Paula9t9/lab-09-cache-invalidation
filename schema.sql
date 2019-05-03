@@ -63,6 +63,6 @@ CREATE TABLE IF NOT EXISTS trails(
   summary VARCHAR(1000),
   trail_url VARCHAR(255),
   conditions VARCHAR(1000),
-  condition_date DATE, 
+  condition_date DATE,
   condition_time TIME
 );

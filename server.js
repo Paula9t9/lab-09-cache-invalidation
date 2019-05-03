@@ -82,22 +82,14 @@ app.get('/location', (request, response) => {
 
 app.get('/weather', (request, response) => {
   try {
-    console.log(`lookup function returned: ${Object.values(lookupFunction(
+    lookupFunction(
       request.query.data,
       'weather',
       weatherDbFetcher,
       weatherApiFetcher
-    ))}`);
-    response
-      .status(200)
-      .send(
-        lookupFunction(
-          request.query.data,
-          'weather',
-          weatherDbFetcher,
-          weatherApiFetcher
-        )
-      );
+    ).then (weatherData => {
+      response.status(200).send(weatherData);
+    });
   }catch (error) {
     console.error(error);
     response.status(500).send('Sorry, something went wrong');
@@ -112,7 +104,7 @@ app.get('/events', (request, response) => {
     }&location.latitude=${queryData.latitude}`;
     superagent
       .get(dataFile)
-      .set({ Authorization: `Bearer ${process.env.EVENTBRITE_KEY}` })
+      .set({ Authorization: `Bearer ${process.env.EVENTBRITE_API_KEY}` })
       .end((err, eventBriteApiResponse) => {
         let eventMap = eventBriteApiResponse.body.events.map(
           element => new Event(element)
@@ -123,6 +115,7 @@ app.get('/events', (request, response) => {
     console.log(error);
     response.status(500).send('There is an error on our end sorry');
   }
+  response.send('not real event data');
 });
 
 function lookupFunction(locationData, table, dbFetcher, apiFetcher) {
@@ -134,12 +127,8 @@ function lookupFunction(locationData, table, dbFetcher, apiFetcher) {
     //if data in database
     console.log(`data.rowCount: ${data.rowCount}`);
     if (data.rowCount > 0) {
-      console.log(`dbFetcher returned: ${Object.values(dbFetcher(data.id))}`);
-      return dbFetcher(data.id);
+      return data.rows;
     } else {
-      console.log(`apiFetcher returned: ${Object.values(apiFetcher(locationData.id,
-        locationData.latitude,
-        locationData.longitude))}`);
       return apiFetcher(
         locationData.id,
         locationData.latitude,
@@ -154,7 +143,10 @@ function weatherDbFetcher(id) {
   //go into weather table and return correct weather object
   let sqlStatement = 'SELECT * FROM weather WHERE location_id = $1;';
   let value = [id];
-  return client.query(sqlStatement, value);
+  return client.query(sqlStatement, value)
+    .then( dbResult => {
+      return dbResult.rows;
+    });
 }
 
 function weatherApiFetcher(id, latitude, longitude) {
@@ -162,9 +154,9 @@ function weatherApiFetcher(id, latitude, longitude) {
   console.log(`location id: ${id}`);
   try {
     console.log(`latitude: ${latitude}, longitude: ${longitude}`);
-    let dataFile = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
+    let dataFile = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${latitude},${longitude}`;
 
-    superagent.get(dataFile).end((err, weatherApiResponse) => {
+    return superagent.get(dataFile).end((err, weatherApiResponse) => {
       console.log(`weatherApiResponse: ${weatherApiResponse}`);
       let weatherForecastMap = weatherApiResponse.body.daily.data.map(element => {
         return new Weather(element.summary, element.time);
@@ -185,7 +177,6 @@ function weatherApiFetcher(id, latitude, longitude) {
     });
   } catch(error){
     console.log(error);
-    response.status(500).send('There is an error on our end sorry');
   }
 }
 
@@ -193,3 +184,17 @@ function handleError(err, res) {
   console.error(err);
   if (res) res.status(500).send('Sorry, something went wrong');
 }
+
+app.get('/testing', (req, res) => {
+  getDataFromApi()
+    .then( weathers => {
+      res.send(weathers);
+    });
+});
+
+let getDataFromApi = () => {
+  return superagent.get(`https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${33},${33}`)
+    .then( resultFromDarkSky => {
+      return resultFromDarkSky.body.daily.data.map(weatherObj => new Weather(weatherObj));
+    });
+};
