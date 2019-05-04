@@ -17,7 +17,7 @@ app.listen(port, () => console.log(`Listening on port ${port}`));
 const client = new pg.Client(process.env.DATABASE_URL);
 client.connect();
 
-//construction function
+//constructor functions
 function Location(query, res) {
   this.search_query = query;
   this.formatted_query = res.results[0].formatted_address;
@@ -37,87 +37,45 @@ function Event(eventRes) {
   this.summary = eventRes.summary;
 }
 
+//Get location data from Google Maps API
 app.get('/location', (request, response) => {
   try {
     const queryData = request.query.data;
-    //check if query in database
+    //check if query is already in database
     let sqlStatement = 'SELECT * FROM locations WHERE search_query = $1;';
     let value = [queryData];
-    return client.query(sqlStatement, value).then(data => {
-      //if data in database
-      if (data.rowCount > 0) {
-        //use data from db and send result
-        response.status(200).send(data.rows[0]);
-      } else {
-        let dataFile = `https://maps.googleapis.com/maps/api/geocode/json?address=${queryData}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
-        superagent.get(dataFile).end((err, googleMapsApiResponse) => {
-          console.log(`googleMapsApiResponse: ${googleMapsApiResponse.body.status}`);
-          const locationObject = new Location(
-            queryData,
-            googleMapsApiResponse.body
-          );
-          let insertStatement =
-            'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ( $1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;';
-          let insertValue = [
-            locationObject.search_query,
-            locationObject.formatted_query,
-            locationObject.latitude,
-            locationObject.longitude
-          ];
-          client.query(insertStatement, insertValue)
-            .then(result => {
-              console.log(`SQL query result: ${result.rows[0].id}`);
-              locationObject.id = result.rows[0].id;
-              return locationObject;
-            });
-          response.status(200).send(locationObject);
-        });
-      }
-    });
-  } catch (error) {
-    console.log(error);
-    response.status(500).send('There is an error on our end sorry');
-  }
-});
-
-app.get('/weather', (request, response) => {
-  try {
-    console.log(`lookup function returned: ${Object.values(lookupFunction(
-      request.query.data,
-      'weather',
-      weatherDbFetcher,
-      weatherApiFetcher
-    ))}`);
-    response
-      .status(200)
-      .send(
-        lookupFunction(
-          request.query.data,
-          'weather',
-          weatherDbFetcher,
-          weatherApiFetcher
-        )
-      );
-  }catch (error) {
-    console.error(error);
-    response.status(500).send('Sorry, something went wrong');
-  }
-});
-
-app.get('/events', (request, response) => {
-  try {
-    const queryData = request.query.data;
-    let dataFile = `https://www.eventbriteapi.com/v3/events/search?location.longitude=${
-      queryData.longitude
-    }&location.latitude=${queryData.latitude}`;
-    superagent
-      .get(dataFile)
-      .set({ Authorization: `Bearer ${process.env.EVENTBRITE_KEY}` })
-      .end((err, eventBriteApiResponse) => {
-        let eventMap = eventBriteApiResponse.body.events.map(
-          element => new Event(element)
-        );
-        response.status(200).send(eventMap);
+    return client.query(sqlStatement, value)
+      .then(data => {
+        //if data in database
+        if (data.rowCount > 0) {
+          //use data from db and send result
+          response.status(200).send(data.rows[0]);
+        } else {
+          //get new data from Google Maps
+          let dataFile = `https://maps.googleapis.com/maps/api/geocode/json?address=${queryData}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+          superagent.get(dataFile).then((googleMapsApiResponse) => {
+            const locationObject = new Location(
+              queryData,
+              googleMapsApiResponse.body
+            );
+            //Insert new data into db
+            let insertStatement =
+              'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ( $1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;';
+            let insertValue = [
+              locationObject.search_query,
+              locationObject.formatted_query,
+              locationObject.latitude,
+              locationObject.longitude
+            ];
+            client.query(insertStatement, insertValue)
+              .then(result => {
+                //set the new id returned from database on our current object
+                locationObject.id = result.rows[0].id;
+                return locationObject;
+              });
+            response.status(200).send(locationObject);
+          });
+        }
       });
   } catch (error) {
     console.log(error);
@@ -125,21 +83,53 @@ app.get('/events', (request, response) => {
   }
 });
 
-function lookupFunction(locationData, table, dbFetcher, apiFetcher) {
-  //if locations contains searchQuery, execute other functions to fetch their data
-  console.log(`locationData: ${locationData.id}`);
+//listening for request for weather data
+app.get('/weather', (request, response) => {
+  try {
+    //Pass relevant data to lookup function to decide how to fetch data
+    //Then it will call either db or passed in function to retrieve data
+    lookupFunction(request.query.data, 'weather', weatherApiFetcher)
+      //Once data returns, send that data in our response
+      .then ( weatherData => {
+        console.log('Sending weather in response: ', weatherData);
+        response.status(200).send(weatherData);
+      });
+  } catch (error) {
+    console.error(error);
+    response.status(500).send('Sorry, something went wrong');
+  }
+});
+
+//listening for request for events data
+app.get('/events', (request, response) => {
+  try {
+    //Pass relevant data to lookupFunction to decide how to fetch data
+    //Then it will call db or provided function to retrieve data
+    lookupFunction(request.query.data, 'events', eventApiFetcher)
+      //Once data returns, send that data in our response
+      .then( eventData => {
+        console.log('Sending in response: eventData: ', eventData);
+        return response.status(200).send(eventData);
+      });
+  } catch (error) {
+    console.log(error);
+    response.status(500).send('There is an error on our end sorry');
+  }
+});
+
+//queries the given database to decide where to return data from
+//calls the provided api fetcher function if new data is needed
+function lookupFunction(locationData, table, apiFetcher) {
+  //checks relevant table for existing data
   let sqlStatement = `SELECT * FROM ${table} WHERE location_id = $1;`;
   let values = [locationData.id];
   return client.query(sqlStatement, values).then(data => {
     //if data in database
-    console.log(`data.rowCount: ${data.rowCount}`);
     if (data.rowCount > 0) {
-      console.log(`dbFetcher returned: ${Object.values(dbFetcher(data.id))}`);
-      return dbFetcher(data.id);
+      //return that data
+      return data.rows;
     } else {
-      console.log(`apiFetcher returned: ${Object.values(apiFetcher(locationData.id,
-        locationData.latitude,
-        locationData.longitude))}`);
+      //Call api fetcher to get new data
       return apiFetcher(
         locationData.id,
         locationData.latitude,
@@ -149,43 +139,67 @@ function lookupFunction(locationData, table, dbFetcher, apiFetcher) {
   });
 }
 
-function weatherDbFetcher(id) {
-  console.log('WeatherDbFetcher called');
-  //go into weather table and return correct weather object
-  let sqlStatement = 'SELECT * FROM weather WHERE location_id = $1;';
-  let value = [id];
-  return client.query(sqlStatement, value);
-}
-
+//Fetches weather data if lookup function cannot find existing data in db
 function weatherApiFetcher(id, latitude, longitude) {
-  console.log('WeatchAPIFetcher called');
-  console.log(`location id: ${id}`);
   try {
-    console.log(`latitude: ${latitude}, longitude: ${longitude}`);
-    let dataFile = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
+    //url to be queried
+    let apiQueryUrl = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
 
-    superagent.get(dataFile).end((err, weatherApiResponse) => {
-      console.log(`weatherApiResponse: ${weatherApiResponse}`);
+    //return the data retrieved via superagent
+    return superagent.get(apiQueryUrl).then((weatherApiResponse) => {
+      //pass data through weather constructor and store in array
       let weatherForecastMap = weatherApiResponse.body.daily.data.map(element => {
         return new Weather(element.summary, element.time);
       });
-      console.log(weatherForecastMap);
+      //store new data in the database
       weatherForecastMap.forEach(element => {
+        console.log('location id to be inserted in weather: ', id);
         let insertStatement =
         'INSERT INTO weather (location_id, forecast, weather_time) VALUES ( $1, $2, $3);';
-        let insertValue = [
-          id,
-          element.forecast,
-          element.time
-        ];
+        let insertValue = [ id, element.forecast, element.time];
         client.query(insertStatement, insertValue);
       });
-
+      //return the array of weather objects
       return weatherForecastMap;
     });
   } catch(error){
     console.log(error);
-    response.status(500).send('There is an error on our end sorry');
+    response.status(500).send('There is an error on our end, sorry');
+  }
+}
+
+//fetches data from api if lookup function couldn't find data in the db
+function eventApiFetcher(locationId, latitude, longitude){
+  try {
+    //url to be queried
+    let apiQueryUrl = `https://www.eventbriteapi.com/v3/events/search?location.longitude=${longitude}&location.latitude=${latitude}`;
+
+    //return data retrieved via superagent
+    return superagent
+      .get(apiQueryUrl)
+      //authorization header required by eventbrite
+      .set({ Authorization: `Bearer ${process.env.EVENTBRITE_KEY}` })
+      .then((eventBriteApiResponse) => {
+        //Pass event data through constructor and store in array
+        let eventMap = eventBriteApiResponse.body.events.map(
+          element => { 
+            return new Event(element);
+          }
+        );
+        //Store the new data in the database
+        eventMap.forEach(element => {
+          console.log('location id to be inserted: ', locationId);
+          let insertStatement =
+          'INSERT INTO events (location_id, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5);';
+          let insertValue = [ locationId, element.link, element.name, element.event_date, element.summary];
+          client.query(insertStatement, insertValue);
+        });
+        console.log('ApiFetcher returned data: ' + eventMap);
+        return eventMap;
+      });
+  } catch(error){
+    console.log('Error: ', error);
+    response.status(500).send('There is an error on our end, sorry');
   }
 }
 
