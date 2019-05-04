@@ -53,7 +53,7 @@ app.get('/location', (request, response) => {
         } else {
           //get new data from Google Maps
           let dataFile = `https://maps.googleapis.com/maps/api/geocode/json?address=${queryData}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
-          superagent.get(dataFile).end((err, googleMapsApiResponse) => {
+          superagent.get(dataFile).then((googleMapsApiResponse) => {
             const locationObject = new Location(
               queryData,
               googleMapsApiResponse.body
@@ -146,7 +146,7 @@ function weatherApiFetcher(id, latitude, longitude) {
     let apiQueryUrl = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
 
     //return the data retrieved via superagent
-    return superagent.get(apiQueryUrl).end((err, weatherApiResponse) => {
+    return superagent.get(apiQueryUrl).then((weatherApiResponse) => {
       //pass data through weather constructor and store in array
       let weatherForecastMap = weatherApiResponse.body.daily.data.map(element => {
         return new Weather(element.summary, element.time);
@@ -179,7 +179,7 @@ function eventApiFetcher(locationId, latitude, longitude){
       .get(apiQueryUrl)
       //authorization header required by eventbrite
       .set({ Authorization: `Bearer ${process.env.EVENTBRITE_KEY}` })
-      .end((err, eventBriteApiResponse) => {
+      .then((eventBriteApiResponse) => {
         //Pass event data through constructor and store in array
         let eventMap = eventBriteApiResponse.body.events.map(
           element => { 
