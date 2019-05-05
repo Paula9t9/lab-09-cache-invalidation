@@ -90,7 +90,7 @@ app.get('/location', (request, response) => {
       });
   } catch (error) {
     console.log(error);
-    response.status(500).send('There was an error on our end sorry.');
+    response.status(500).send('There was an error on our end, sorry.');
   }
 });
 
@@ -141,22 +141,36 @@ app.get('/movies', (request, response) => {
 //queries the given database to decide where to return data from
 //calls the provided api fetcher function if new data is needed
 function lookupFunction(locationData, table, apiFetcher) {
-  console.log('Provided location id: ', locationData.id);
-  //checks relevant table for existing data
-  let sqlStatement = `SELECT * FROM ${table} WHERE location_id = $1;`;
-  let values = [locationData.id];
-  return client.query(sqlStatement, values).then(data => {
-    //if data in database
-    if (data.rowCount > 0) {
-      //return that data
-      return data.rows;
-    } else {
-      //Call api fetcher to get new data
-      return apiFetcher(
-        locationData
-      );
-    }
-  });
+  try {
+    console.log('Provided location id: ', locationData.id);
+    //checks relevant table for existing data
+    let sqlStatement = `SELECT * FROM ${table} WHERE location_id = $1;`;
+    let values = [locationData.id];
+    return client.query(sqlStatement, values).then(data => {
+      //if data in database
+      if (data.rowCount > 0) {
+        //Check if data is old. Old is 15 seconds for grading purposes
+        if ( (Date.now() - data.rows[0].created_at)  > 15 * 1000){
+          //delete the rows and the call apifetcher for new data
+          return deleteOldRows(table, locationData.id).then(() => apiFetcher(locationData));
+        }else {
+          //return that data
+          return data.rows;
+        }
+      } else {
+        //Call api fetcher to get new data
+        return apiFetcher(locationData);
+      }
+    });
+  } catch (error) {
+    console.log(error);
+    response.status(500).send('There was an error on our end, sorry.');
+  }
+}
+
+function deleteOldRows (table, locationId){
+  let deleteStatement = `DELETE FROM ${table} WHERE location_id = ${locationId};`;
+  return client.query(deleteStatement);
 }
 
 //Fetches weather data if lookup function cannot find existing data in db
@@ -173,10 +187,9 @@ function weatherApiFetcher(locationData) {
       });
       //store new data in the database
       weatherForecastMap.forEach(element => {
-        console.log('location id to be inserted in weather: ', locationData.id);
         let insertStatement =
-        'INSERT INTO weather (location_id, forecast, weather_time) VALUES ( $1, $2, $3);';
-        let insertValue = [locationData.id, element.forecast, element.time];
+        'INSERT INTO weather (location_id, created_at, forecast, weather_time) VALUES ($1, $2, $3, $4);';
+        let insertValue = [locationData.id, Date.now(), element.forecast, element.time];
         client.query(insertStatement, insertValue);
       });
       //return the array of weather objects
@@ -242,7 +255,6 @@ function movieApiFetcher (locationData) {
     console.log('Error: ', error);
     response.status(500).send('There was an error on our end, sorry.');
   }
-
 }
 
 //TODO: implement handleError to handle caught errors for each route
