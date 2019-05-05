@@ -79,7 +79,7 @@ app.get('/location', (request, response) => {
       });
   } catch (error) {
     console.log(error);
-    response.status(500).send('There is an error on our end sorry');
+    response.status(500).send('There was an error on our end sorry.');
   }
 });
 
@@ -91,12 +91,11 @@ app.get('/weather', (request, response) => {
     lookupFunction(request.query.data, 'weather', weatherApiFetcher)
       //Once data returns, send that data in our response
       .then ( weatherData => {
-        console.log('Sending weather in response: ', weatherData);
         response.status(200).send(weatherData);
       });
   } catch (error) {
     console.error(error);
-    response.status(500).send('Sorry, something went wrong');
+    response.status(500).send('Sorry, something went wrong.');
   }
 });
 
@@ -108,12 +107,23 @@ app.get('/events', (request, response) => {
     lookupFunction(request.query.data, 'events', eventApiFetcher)
       //Once data returns, send that data in our response
       .then( eventData => {
-        console.log('Sending in response: eventData: ', eventData);
         return response.status(200).send(eventData);
       });
   } catch (error) {
     console.log(error);
-    response.status(500).send('There is an error on our end sorry');
+    response.status(500).send('There was an error on our end, sorry.');
+  }
+});
+
+app.get('/movies', (request, response) => {
+  try {
+    lookupFunction(request.query.data, 'movies', movieApiFetcher)
+      .then( movieData => {
+        return response.status(200).send(movieData);
+      });
+  } catch (error) {
+    console.log(error);
+    response.status(500).send('There was an error on our end, sorry.');
   }
 });
 
@@ -131,19 +141,17 @@ function lookupFunction(locationData, table, apiFetcher) {
     } else {
       //Call api fetcher to get new data
       return apiFetcher(
-        locationData.id,
-        locationData.latitude,
-        locationData.longitude
+        locationData
       );
     }
   });
 }
 
 //Fetches weather data if lookup function cannot find existing data in db
-function weatherApiFetcher(id, latitude, longitude) {
+function weatherApiFetcher(locationData) {
   try {
     //url to be queried
-    let apiQueryUrl = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${latitude},${longitude}`;
+    let apiQueryUrl = `https://api.darksky.net/forecast/${process.env.DARKSKY_KEY}/${locationData.latitude},${locationData.longitude}`;
 
     //return the data retrieved via superagent
     return superagent.get(apiQueryUrl).then((weatherApiResponse) => {
@@ -153,10 +161,10 @@ function weatherApiFetcher(id, latitude, longitude) {
       });
       //store new data in the database
       weatherForecastMap.forEach(element => {
-        console.log('location id to be inserted in weather: ', id);
+        console.log('location id to be inserted in weather: ', locationData.id);
         let insertStatement =
         'INSERT INTO weather (location_id, forecast, weather_time) VALUES ( $1, $2, $3);';
-        let insertValue = [ id, element.forecast, element.time];
+        let insertValue = [ locationData.id, element.forecast, element.time];
         client.query(insertStatement, insertValue);
       });
       //return the array of weather objects
@@ -164,15 +172,15 @@ function weatherApiFetcher(id, latitude, longitude) {
     });
   } catch(error){
     console.log(error);
-    response.status(500).send('There is an error on our end, sorry');
+    response.status(500).send('There was an error on our end, sorry.');
   }
 }
 
 //fetches data from api if lookup function couldn't find data in the db
-function eventApiFetcher(locationId, latitude, longitude){
+function eventApiFetcher(locationData){
   try {
     //url to be queried
-    let apiQueryUrl = `https://www.eventbriteapi.com/v3/events/search?location.longitude=${longitude}&location.latitude=${latitude}`;
+    let apiQueryUrl = `https://www.eventbriteapi.com/v3/events/search?location.longitude=${locationData.longitude}&location.latitude=${locationData.latitude}`;
 
     //return data retrieved via superagent
     return superagent
@@ -188,22 +196,32 @@ function eventApiFetcher(locationId, latitude, longitude){
         );
         //Store the new data in the database
         eventMap.forEach(element => {
-          console.log('location id to be inserted: ', locationId);
           let insertStatement =
           'INSERT INTO events (location_id, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5);';
-          let insertValue = [ locationId, element.link, element.name, element.event_date, element.summary];
+          let insertValue = [ locationData.id, element.link, element.name, element.event_date, element.summary];
           client.query(insertStatement, insertValue);
         });
-        console.log('ApiFetcher returned data: ' + eventMap);
         return eventMap;
       });
   } catch(error){
     console.log('Error: ', error);
-    response.status(500).send('There is an error on our end, sorry');
+    response.status(500).send('There was an error on our end, sorry.');
   }
 }
 
+function movieApiFetcher (locationData) {
+  try{
+    let apiQueryUrl = `https://api.themoviedb.org/3/search/movie?api_key=${MOVIE_API_KEY}&language=en-US&query=${searchquery}&page=1&include_adult=false`;
+
+  } catch(error){
+    console.log('Error: ', error);
+    response.status(500).send('There was an error on our end, sorry.');
+  }
+
+}
+
+//TODO: implement handleError to handle caught errors for each route
 function handleError(err, res) {
   console.error(err);
-  if (res) res.status(500).send('Sorry, something went wrong');
+  if (res) res.status(500).send('Sorry, something went wrong.');
 }
