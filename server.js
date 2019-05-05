@@ -140,6 +140,7 @@ app.get('/movies', (request, response) => {
 //queries the given database to decide where to return data from
 //calls the provided api fetcher function if new data is needed
 function lookupFunction(locationData, table, apiFetcher) {
+  console.log('Provided location id: ', locationData.id);
   //checks relevant table for existing data
   let sqlStatement = `SELECT * FROM ${table} WHERE location_id = $1;`;
   let values = [locationData.id];
@@ -207,8 +208,8 @@ function eventApiFetcher(locationData){
         //Store the new data in the database
         eventMap.forEach(element => {
           let insertStatement =
-          'INSERT INTO events (location_id, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5);';
-          let insertValue = [locationData.id, element.link, element.name, element.event_date, element.summary];
+          'INSERT INTO events (location_id, created_at, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5, $6);';
+          let insertValue = [locationData.id, Date.now(),element.link, element.name, element.event_date, element.summary];
           client.query(insertStatement, insertValue);
         });
         return eventMap;
@@ -230,8 +231,8 @@ function movieApiFetcher (locationData) {
           return new Movie(result);
         });
         movieMap.forEach( movie => {
-          let insertStatement = 'INSERT INTO movies ( location_id, movie_title, overview, avg_votes, total_votes, image_url, popularity, release_date) VALUES ($1, $2, $3, $4, $5);';
-          let insertValues = [locationData.id, movie.title, movie.overview, movie.average_votes, movie.total_votes, movie.image_url, movie.popularity, movie.release_date];
+          let insertStatement = 'INSERT INTO movies (location_id, created_at,movie_title, overview, avg_votes, total_votes, image_url, popularity, release_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);';
+          let insertValues = [locationData.id, Date.now(),movie.title, movie.overview, movie.average_votes, movie.total_votes, movie.image_url, movie.popularity, movie.release_date];
           client.query(insertStatement, insertValues);
         });
         return movieMap;

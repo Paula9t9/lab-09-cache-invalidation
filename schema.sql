@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS weather(
 CREATE TABLE IF NOT EXISTS events(
   id SERIAL PRIMARY KEY,
   location_id INTEGER REFERENCES locations(id),
-  time_stamp BIGINT,
+  created_at BIGINT,
   link VARCHAR(255),
   event_name VARCHAR(255),
   event_date CHAR(15),
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS events(
 CREATE TABLE IF NOT EXISTS yelp(
   id SERIAL PRIMARY KEY,
   location_id INTEGER REFERENCES locations(id),
-  time_stamp BIGINT,
+  created_at BIGINT,
   yelp_name VARCHAR(255),
   image_url VARCHAR(255),
   price CHAR(15),
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS yelp(
 CREATE TABLE IF NOT EXISTS movies(
   id SERIAL PRIMARY KEY,
   location_id INTEGER REFERENCES locations(id),
-  time_stamp BIGINT,
+  created_at BIGINT,
   movie_title VARCHAR(255),
   overview VARCHAR(1000),
   avg_votes NUMERIC,
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS movies(
 CREATE TABLE IF NOT EXISTS trails(
   id SERIAL PRIMARY KEY,
   location_id INTEGER REFERENCES locations(id),
-  time_stamp BIGINT,
+  created_at BIGINT,
   trail_name VARCHAR(255),
   formatted_location VARCHAR(255),
   trail_length NUMERIC,
