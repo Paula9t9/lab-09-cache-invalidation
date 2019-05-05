@@ -37,6 +37,16 @@ function Event(eventRes) {
   this.summary = eventRes.summary;
 }
 
+function Movie(movieRes){
+  this.title = movieRes.title;
+  this.overview = movieRes.overview;
+  this.average_votes = movieRes.vote_average;
+  this.total_votes = movieRes.vote_count;
+  this.image_url = 'https://image.tmdb.org/t/p/w200' + movieRes.poster_path;
+  this.popularity = movieRes.popularity;
+  this.released_on = movieRes.release_date;
+}
+
 //Get location data from Google Maps API
 app.get('/location', (request, response) => {
   try {
@@ -198,7 +208,7 @@ function eventApiFetcher(locationData){
         eventMap.forEach(element => {
           let insertStatement =
           'INSERT INTO events (location_id, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5);';
-          let insertValue = [ locationData.id, element.link, element.name, element.event_date, element.summary];
+          let insertValue = [locationData.id, element.link, element.name, element.event_date, element.summary];
           client.query(insertStatement, insertValue);
         });
         return eventMap;
@@ -211,8 +221,21 @@ function eventApiFetcher(locationData){
 
 function movieApiFetcher (locationData) {
   try{
-    let apiQueryUrl = `https://api.themoviedb.org/3/search/movie?api_key=${MOVIE_API_KEY}&language=en-US&query=${searchquery}&page=1&include_adult=false`;
+    let apiQueryUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&language=en-US&query=${locationData.search_query}&page=1&include_adult=false`;
 
+    return superagent
+      .get(apiQueryUrl)
+      .then( (movieApiResponse) => {
+        let movieMap = movieApiResponse.body.results.map( result => {
+          return new Movie(result);
+        });
+        movieMap.forEach( movie => {
+          let insertStatement = 'INSERT INTO movies ( location_id, movie_title, overview, avg_votes, total_votes, image_url, popularity, release_date) VALUES ($1, $2, $3, $4, $5);';
+          let insertValues = [locationData.id, movie.title, movie.overview, movie.average_votes, movie.total_votes, movie.image_url, movie.popularity, movie.release_date];
+          client.query(insertStatement, insertValues);
+        });
+        return movieMap;
+      });
   } catch(error){
     console.log('Error: ', error);
     response.status(500).send('There was an error on our end, sorry.');
