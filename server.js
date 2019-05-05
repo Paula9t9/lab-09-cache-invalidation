@@ -82,8 +82,9 @@ app.get('/location', (request, response) => {
                 //set the new id returned from database on our current object
                 locationObject.id = result.rows[0].id;
                 return locationObject;
+              }).then( finalLocationObject => {
+                response.status(200).send(finalLocationObject);
               });
-            response.status(200).send(locationObject);
           });
         }
       });
@@ -175,7 +176,7 @@ function weatherApiFetcher(locationData) {
         console.log('location id to be inserted in weather: ', locationData.id);
         let insertStatement =
         'INSERT INTO weather (location_id, forecast, weather_time) VALUES ( $1, $2, $3);';
-        let insertValue = [ locationData.id, element.forecast, element.time];
+        let insertValue = [locationData.id, element.forecast, element.time];
         client.query(insertStatement, insertValue);
       });
       //return the array of weather objects
@@ -209,7 +210,7 @@ function eventApiFetcher(locationData){
         eventMap.forEach(element => {
           let insertStatement =
           'INSERT INTO events (location_id, created_at, link, event_name, event_date, summary) VALUES ( $1, $2, $3, $4, $5, $6);';
-          let insertValue = [locationData.id, Date.now(),element.link, element.name, element.event_date, element.summary];
+          let insertValue = [locationData.id, Date.now(), element.link, element.name, element.event_date, element.summary];
           client.query(insertStatement, insertValue);
         });
         return eventMap;
@@ -232,7 +233,7 @@ function movieApiFetcher (locationData) {
         });
         movieMap.forEach( movie => {
           let insertStatement = 'INSERT INTO movies (location_id, created_at,movie_title, overview, avg_votes, total_votes, image_url, popularity, release_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);';
-          let insertValues = [locationData.id, Date.now(),movie.title, movie.overview, movie.average_votes, movie.total_votes, movie.image_url, movie.popularity, movie.release_date];
+          let insertValues = [locationData.id, Date.now(), movie.title, movie.overview, movie.average_votes, movie.total_votes, movie.image_url, movie.popularity, movie.release_date];
           client.query(insertStatement, insertValues);
         });
         return movieMap;
