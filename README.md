@@ -1,17 +1,7 @@
-# lab-08-back-end
-
-Number and name of feature: Database
-
-Estimate of time needed to complete: ___4 hours__
-
-Start time: _900____
-
-Finish time: _1300__
-
-Actual time needed to complete: _4 hours_
+# lab-09
 
 
-**Author**: Your Name Goes Here
+**Author**: Paula and Rober (cloned from lab 08 by Yuan and Paula)
 **Version**: 1.0.0 (increment the patch/fix version number if you make more commits past your first submission)
 
 ## Overview
